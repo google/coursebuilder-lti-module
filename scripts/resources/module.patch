@@ -1,0 +1,35 @@
+diff --git a/coursebuilder/app.yaml b/coursebuilder/app.yaml
+index 77e389b..c634483 100644
+--- a/coursebuilder/app.yaml
++++ b/coursebuilder/app.yaml
+@@ -18,6 +18,7 @@ env_variables:
+     modules.data_source_providers.data_source_providers
+     modules.dashboard.dashboard
+     modules.i18n_dashboard.i18n_dashboard=disabled
++    modules.lti.lti
+     modules.manual_progress.manual_progress
+     modules.mapreduce.mapreduce_module
+     modules.notifications.notifications
+diff --git a/coursebuilder/scripts/run_all_tests.py b/coursebuilder/scripts/run_all_tests.py
+index ac4b444..1d01470 100644
+--- a/coursebuilder/scripts/run_all_tests.py
++++ b/coursebuilder/scripts/run_all_tests.py
+@@ -31,6 +31,18 @@ import threading
+ 
+ # all test classes with a total count of tests in each
+ ALL_TEST_CLASSES = {
++    'tests.ext.lti.functional_tests.FieldsTest': 9,
++    'tests.ext.lti.functional_tests.GetMissingBaseTest': 2,
++    'tests.ext.lti.functional_tests.LaunchHandlerTest': 10,
++    'tests.ext.lti.functional_tests.LoginHandlerTest': 7,
++    'tests.ext.lti.functional_tests.LTIToolTagTest': 3,
++    'tests.ext.lti.functional_tests.RedirectHandlerTest': 2,
++    'tests.ext.lti.functional_tests.RuntimeTest': 7,
++    'tests.ext.lti.functional_tests.SecurityParserTest': 9,
++    'tests.ext.lti.functional_tests.SerializerTest': 2,
++    'tests.ext.lti.functional_tests.ToolsParserTest': 7,
++    'tests.ext.lti.functional_tests.UrljoinTestCase': 6,
++    'tests.ext.lti.functional_tests.ValidationHandlerTest': 20,
+     'tests.functional.admin_settings.AdminSettingsTests': 2,
+     'tests.functional.admin_settings.HtmlHookTest': 11,
+     'tests.functional.admin_settings.JinjaContextTest': 2,
