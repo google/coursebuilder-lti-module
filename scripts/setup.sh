@@ -22,6 +22,37 @@
 . "$(dirname "$0")/common.sh"
 
 
-get_course_builder
-link_module
-link_tests
+TARGET=$COURSE_BUILDER_DIR
+
+
+function usage() { cat <<EOF
+
+Usage: $0 [-d <directory>]
+
+-d  Absolute path to the directory containing your Course Builder installation.
+    If not passed, a new install will be created in $TARGET
+-h  Show this message
+
+EOF
+}
+
+
+while getopts d:h option
+do
+    case $option
+    in
+        d)  TARGET="$OPTARG" ;;
+        h)  usage; exit 0;;
+        *)  usage; exit 1;;
+    esac
+done
+
+
+if [ $TARGET == $COURSE_BUILDER_DIR ]; then
+    get_course_builder
+fi
+
+
+check_directory $TARGET
+link_module $TARGET
+link_tests $TARGET
