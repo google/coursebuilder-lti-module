@@ -152,6 +152,7 @@ _LAUNCH_URL = _BASE_URL + '/launch'
 _LOGIN_URL = _BASE_URL + '/login'
 _POST = 'POST'
 _REDIRECT_URL = _BASE_URL + '/redirect'
+_RESOURCES_URL = '/modules' + _BASE_URL + '/resources'
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 _VALIDATION_URL = _BASE_URL
 _YAML_ENTRY_DESCRIPTION = 'description'
@@ -547,7 +548,7 @@ class LTIToolTag(tags.BaseTag):
         return 'gcb'
 
     def get_icon_url(self):
-        return '/extensions/tags/gcb/resources/iframe.png'
+        return _RESOURCES_URL + '/lti-iframe.png'
 
     def get_schema(self, handler):
         runtime = None
@@ -1033,7 +1034,8 @@ def register_module():
             courses.Course.OPTIONS_SCHEMA_PROVIDERS.remove(schema_provider)
         tags.Registry.remove_tag_binding(LTIToolTag.binding_name)
 
-    global_handlers = []
+    global_handlers = [
+        (os.path.join(_RESOURCES_URL, '.*'), tags.ResourcesHandler)]
     namespaced_handlers = [
         (_LAUNCH_URL, LaunchHandler),
         (_LOGIN_URL, LoginHandler),
