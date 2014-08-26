@@ -1,13 +1,12 @@
 module_name: modules.lti.lti
 module_uri: https://github.com/google/coursebuilder-lti-module
-module_version: 1.0.1
+module_version: 1.0.2
 container_version: 1.6.1-7aebc8574de7
 description: Adds LTI 1.1.1 consumer and provider support to Course Builder
 license: Apache 2.0
 tests:
-  tests.ext.lti.functional_tests.FieldsTest: 9
-  tests.ext.lti.functional_tests.GetMissingBaseTest: 2
-  tests.ext.lti.functional_tests.LaunchHandlerTest: 10
+  tests.ext.lti.functional_tests.FieldsTest: 10
+  tests.ext.lti.functional_tests.LaunchHandlerTest: 8
   tests.ext.lti.functional_tests.LoginHandlerTest: 7
   tests.ext.lti.functional_tests.LTIToolTagTest: 3
   tests.ext.lti.functional_tests.RedirectHandlerTest: 2
@@ -15,8 +14,9 @@ tests:
   tests.ext.lti.functional_tests.SecurityParserTest: 9
   tests.ext.lti.functional_tests.SerializerTest: 2
   tests.ext.lti.functional_tests.ToolsParserTest: 7
-  tests.ext.lti.functional_tests.UrljoinTestCase: 6
-  tests.ext.lti.functional_tests.ValidationHandlerTest: 20
+  tests.ext.lti.functional_tests.UrljoinTest: 6
+  tests.ext.lti.functional_tests.ValidationHandlerTest: 21
 module_env:
-  certified_consumer: false
-  certified_provider: false
+  certification:
+    consumer: []
+    provider: [1.0]

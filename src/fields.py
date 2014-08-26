@@ -36,7 +36,6 @@ LAUNCH_PRESENTATION_HEIGHT = 'launch_presentation_height'
 LAUNCH_PRESENTATION_LOCALE = 'launch_presentation_locale'
 LAUNCH_PRESENTATION_RETURN_URL = 'launch_presentation_return_url'
 LAUNCH_PRESENTATION_WIDTH = 'launch_presentation_width'
-LAUNCH_URL = 'launch_url'
 LIS_PERSON_CONTACT_EMAIL_PRIMARY = 'lis_person_contact_email_primary'
 LIS_PERSON_NAME_FAMILY = 'lis_person_name_family'
 LIS_PERSON_NAME_FULL = 'lis_person_name_full'
@@ -48,7 +47,6 @@ RESOURCE_LINK_ID = 'resource_link_id'
 RESOURCE_LINK_TITLE = 'resource_link_title'
 ROLE_SCOPE_MENTOR = 'role_scope_mentor'
 ROLES = 'roles'
-SECURE_LAUNCH_URL = 'secure_launch_url'
 TOOL_CONSUMER_INFO_PRODUCT_FAMILY_CODE = (
     'tool_consumer_info_product_family_code')
 TOOL_CONSUMER_INFO_VERSION = 'tool_consumer_info_version'
@@ -71,7 +69,6 @@ _BASE = frozenset([
     LAUNCH_PRESENTATION_LOCALE,
     LAUNCH_PRESENTATION_RETURN_URL,
     LAUNCH_PRESENTATION_WIDTH,
-    LAUNCH_URL,
     LIS_PERSON_CONTACT_EMAIL_PRIMARY,
     LIS_PERSON_NAME_FAMILY,
     LIS_PERSON_NAME_FULL,
@@ -83,7 +80,6 @@ _BASE = frozenset([
     RESOURCE_LINK_TITLE,
     ROLE_SCOPE_MENTOR,
     ROLES,
-    SECURE_LAUNCH_URL,
     TOOL_CONSUMER_INFO_PRODUCT_FAMILY_CODE,
     TOOL_CONSUMER_INFO_VERSION,
     TOOL_CONSUMER_INSTANCE_CONTACT_EMAIL,
@@ -110,10 +106,13 @@ CUSTOM_CB_FORCE_LOGIN = _CUSTOM_PREFIX + 'cb_force_login'
 CUSTOM_CB_RESOURCE = _CUSTOM_PREFIX + 'cb_resource'
 
 _EXTENSIONS = frozenset([
+    CUSTOM_CB_FORCE_LOGIN,
     CUSTOM_CB_RESOURCE,
 ])
 
 _ALL = sorted(_BASE.union(_EXTENSIONS))
+_LTI_MESSAGE_TYPE_VALID = 'basic-lti-launch-request'
+_LTI_VERSION_VALID = 'LTI-1p0'
 _ROLE_STUDENT = 'student'
 # Required fields in the LTI spec; does not include fields required by the CB
 # provider.
@@ -121,45 +120,15 @@ _REQUIRED = frozenset([
     LTI_MESSAGE_TYPE,
     LTI_VERSION,
     RESOURCE_LINK_ID,
-])  # One of LAUNCH_URL, SECURE_LAUNCH_URL must also be set; enforced below.
+])
 _DEFAULTS = {
-    LTI_MESSAGE_TYPE: 'basic-lti-launch-request',
-    LTI_VERSION: 'LTI-1p0'
+    LTI_MESSAGE_TYPE: _LTI_MESSAGE_TYPE_VALID,
+    LTI_VERSION: _LTI_VERSION_VALID,
 }
-
-
-def _check_launch_url(from_dict):
-    has_launch_url = from_dict.has_key(LAUNCH_URL)
-    has_secure_launch_url = from_dict.has_key(SECURE_LAUNCH_URL)
-
-    if has_launch_url and has_secure_launch_url:
-        raise ValueError(
-            'Cannot pass both %s and %s' % (LAUNCH_URL, SECURE_LAUNCH_URL))
-
-    if not (has_launch_url or has_secure_launch_url):
-        raise ValueError(
-            'Must pass one of %s or %s' % (LAUNCH_URL, SECURE_LAUNCH_URL))
 
 
 def _is_valid(name):
     return name in _ALL or name.startswith(_CUSTOM_PREFIX)
-
-
-def _get_missing_base(from_dict):
-    """Gets the missing base required LTI fields from the given dict.
-
-    Base fields are statically enumerated and do not include fields like
-    LAUNCH_URL or SECURE_LAUNCH_URL, which must be checked dynamically since one
-    or the other is required.
-
-    Args:
-        from_dict: dict of filed name string to value. The fields to process.
-
-    Returns:
-        List of string. The missing field names in lexicographical order. May be
-        empty.
-    """
-    return sorted(set(_REQUIRED) - set(from_dict.keys()))
 
 
 def get_custom_cb_force_login(request_dict):
@@ -170,6 +139,14 @@ def get_custom_cb_force_login(request_dict):
         return False
 
     return True if value.lower() == 'true' else False
+
+
+def lti_message_type_valid(message_type):
+    return message_type == _LTI_MESSAGE_TYPE_VALID
+
+
+def lti_version_valid(version):
+    return version == _LTI_VERSION_VALID
 
 
 def make(from_dict):
@@ -185,15 +162,13 @@ def make(from_dict):
         transport to an LTI provider.
 
     Raises:
-        ValueError: if any keys in from_dict are not valid LTI fields; the
+        ValueError: if any keys in from_dict are not valid LTI fields or the
         result is missing any required LTI fields because they were not given in
-        from_dict; or the from_dict contains both LAUNCH_URL and
-        SECURE_LAUNCH_URL.
+        from_dict.
     """
     bad_fields = []
     missing = set(_REQUIRED) - set(_DEFAULTS)
     to_dict = dict(_DEFAULTS)
-    _check_launch_url(from_dict)
 
     for k, v in from_dict.iteritems():
         missing.discard(k)
@@ -213,6 +188,10 @@ def make(from_dict):
                 [m for m in sorted(missing)]))
 
     return to_dict
+
+
+def resource_link_id_valid(resource_link_id):
+    return bool(resource_link_id)
 
 
 class _Serializer(object):

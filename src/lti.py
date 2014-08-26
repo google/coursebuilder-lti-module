@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""LTI module that supports LTI 1.0 - 1.2.
+"""LTI module that supports LTI 1.0 (provider) and 1.0 - 1.2 (consumer).
 
 LTI is an open standard for re-using online education tools. IMS Global is the
 member organization that owns the standard.
@@ -25,7 +25,7 @@ The LTI standards are available at http://www.imsglobal.org/lti/.
 
 The LTI module is enabled by default. LTI configuration is done on a course-by-
 course basis in the Course Options page of the Course Builder admin site. Let's
-look at both the consumer and producer feature sets in turn.
+look at both the consumer and provider feature sets in turn.
 
 To use the consumer feature set, you must populate the 'LTI tools' section of
 the Course Options page. This is a YAML text entry field in which you enter tool
@@ -73,9 +73,7 @@ Otherwise, anybody can impersonate your consumer, which allows them to both
 access and mutate your course and student data. You have been warned.
 
 Users of the Course Builder LTI provider must transmit the required fields from
-the LTI spec. They must also transmit either 'launch_url', 'secure_launch_url',
-or both (in which case 'secure_launch_url' will be used and 'launch_url' will be
-ignored). The request must be signed per the LTI spec (meaning HMACed OAuth 1).
+the LTI spec, and the request must be signed signed via HMACed OAuth 1.0.
 
 Additionally, they must transmit a field named 'custom_cb_resource'. The value
 of this field is a string that gives the slug-relative URL of the Course Builder
@@ -115,9 +113,6 @@ import os
 import urllib
 from xml import etree
 
-import oauth
-import yaml
-
 from common import crypto
 from common import jinja_utils
 from common import safe_dom
@@ -128,6 +123,9 @@ from models import config
 from models import courses
 from models import custom_modules
 from modules.lti import fields
+
+import oauth
+import yaml
 
 from google.appengine.api import app_identity
 from google.appengine.api import users
@@ -258,7 +256,7 @@ class _Parser(object):
     def _load_yaml(cls, raw_value, errors):
         try:
             return yaml.safe_load(raw_value)
-        except:  # Deliberately broad. pylint: disable-msg=bare-except
+        except:  # Deliberately broad. pylint: disable=bare-except
             errors.append(cls.PARSE_ERROR)
 
     @classmethod
@@ -554,14 +552,14 @@ class LTIToolTag(tags.BaseTag):
         runtime = None
         names_and_descriptions = None
 
-        # Treat as module-protected. pylint: disable-msg=protected-access
+        # Treat as module-protected. pylint: disable=protected-access
         try:
             runtime = _get_runtime(handler.app_context)
             tool_configs = runtime.get_tool_configs()
             names_and_descriptions = sorted([
                 (tool.name, tool.description) for tool in tool_configs.values()
             ])
-        except:  # Broad on purpose. pylint: disable-msg=bare-except
+        except:  # Broad on purpose. pylint: disable=bare-except
             pass
 
         if not names_and_descriptions:
@@ -609,7 +607,7 @@ class LTIToolTag(tags.BaseTag):
         extra_fields = node.attrib.get('extra_fields')
 
         if extra_fields:
-            # Treating as module-protected: pylint: disable-msg=protected-access
+            # Treating as module-protected: pylint: disable=protected-access
             extra_fields = fields._Serializer.dump(extra_fields)
 
         iframe = etree.cElementTree.XML('<iframe style="border: 0;"></iframe>')
@@ -636,12 +634,24 @@ class _BaseHandler(utils.BaseHandler):
             from_dict, fields.LAUNCH_PRESENTATION_RETURN_URL)
 
         if not return_url:
-            _LOG.error(
-                'Unable to process LTI request; %s not specified',
-                fields.LAUNCH_PRESENTATION_RETURN_URL)
-            self.error(400)
+            self._handle_error(
+                400, 'Unable to process LTI request; %s not specified' % (
+                    fields.LAUNCH_PRESENTATION_RETURN_URL))
+            return
 
         return str(return_url)  # Must cast from unicode to use in redirects.
+
+    def _handle_error(self, code, private_message, public_message=None):
+        if public_message is None:
+            public_message = private_message
+
+        template = jinja_utils.get_template('error.html', [_TEMPLATES_DIR])
+        _LOG.error(private_message)
+        self.error(code)
+        self.response.out.write(template.render({
+            'status_message': self.response.status_message,
+            'details': public_message
+        }))
 
 
 class LaunchHandler(_BaseHandler):
@@ -677,7 +687,7 @@ class LaunchHandler(_BaseHandler):
 
         extra_fields = self.request.get('extra_fields')
         if extra_fields:
-            # Treating as module-protected. pylint: disable-msg=protected-access
+            # Treating as module-protected. pylint: disable=protected-access
             extra_fields = fields._Serializer.load(extra_fields)
 
         # We use a *very* minimal set of common args. Other static values can be
@@ -716,9 +726,8 @@ class LaunchHandler(_BaseHandler):
             fields.LAUNCH_PRESENTATION_RETURN_URL: return_url,
             fields.RESOURCE_LINK_ID: resource_link_id,
             # No support for other roles in CB yet.
-            # Treat as module-protected. pylint: disable-msg=protected-access
+            # Treat as module-protected. pylint: disable=protected-access
             fields.ROLES: fields._ROLE_STUDENT,
-            self._get_url_field(url): url,
         }
 
         if extra_fields:
@@ -729,11 +738,6 @@ class LaunchHandler(_BaseHandler):
 
         self.get_custom_unsigned_launch_parameters(from_dict, name)
         return fields.make(from_dict)
-
-    def _get_url_field(self, url):
-        return (
-            fields.SECURE_LAUNCH_URL if url.startswith('https')
-            else fields.LAUNCH_URL)
 
 
 class LoginHandler(_BaseHandler):
@@ -832,13 +836,6 @@ class ValidationHandler(_BaseHandler):
                 {fields.LAUNCH_PRESENTATION_RETURN_URL: return_url}))
 
     @classmethod
-    def _get_url(cls, post):
-        secure_launch_url = post.get(fields.SECURE_LAUNCH_URL)
-        return (
-            secure_launch_url if secure_launch_url is not None else
-            post.get(fields.LAUNCH_URL))
-
-    @classmethod
     def _needs_login(cls, course_browsable, current_user, force_login):
         already_authenticated = bool(current_user)
 
@@ -846,6 +843,19 @@ class ValidationHandler(_BaseHandler):
             return False
 
         return True
+
+    def _check_base_lti_field(self, field_name, predicate_fn):
+        value = self.request.POST.get(field_name)
+
+        if predicate_fn(value):
+            return value
+
+        message = '%s missing' % field_name
+
+        if value is not None:
+            message = 'invalid %s: %s' % (field_name, value)
+
+        self._handle_error(400, 'Unable to process LTI request: ' + message)
 
     def _get_launch_user_id(self):
         return self.request.POST.get(fields.USER_ID)
@@ -858,39 +868,46 @@ class ValidationHandler(_BaseHandler):
 
         try:
             runtime = _get_runtime(self.app_context)
-        except Exception, e:  # On purpose. pylint: disable-msg=broad-except
-            _LOG.error('Unable to get runtime; error was %s', e)
-            self.error(500)
+        except Exception, e:  # On purpose. pylint: disable=broad-except
+            public_message = 'Unable to get runtime'
+            private_message = public_message + '; error was %s' % e
+            self._handle_error(
+                500, private_message, public_message=public_message)
             return
 
         if not runtime.get_provider_enabled():
-            _LOG.error(
-                    'Unable to process LTI request; provider is not enabled')
-            self.error(404)
+            self._handle_error(
+                404, 'Unable to process LTI request; provider is not enabled')
+            return
+
+        version = self._check_base_lti_field(
+            fields.LTI_VERSION, fields.lti_version_valid)
+        if not version:
+            return
+
+        message_type = self._check_base_lti_field(
+            fields.LTI_MESSAGE_TYPE, fields.lti_message_type_valid)
+        if not message_type:
+            return
+
+        resource_link_id = self._check_base_lti_field(
+            fields.RESOURCE_LINK_ID, fields.resource_link_id_valid)
+        if not resource_link_id:
             return
 
         key = self.request.POST.get(self.OAUTH_KEY_FIELD)
         if not key:
-            _LOG.error(
-                'Unable to process LTI request; %s missing',
-                self.OAUTH_KEY_FIELD)
-            self.error(400)
+            self._handle_error(
+                400, 'Unable to process LTI request; %s missing' % (
+                    self.OAUTH_KEY_FIELD))
             return
 
         security_config = runtime.get_security_config(key)
         if not security_config:
-            _LOG.error(
-                'Unable to process LTI request; no config found for key %s',
-                key)
-            self.error(400)
-            return
-
-        launch_url = self._get_url(self.request.POST)
-        if not launch_url:
-            _LOG.error(
-                'Unable to process LTI request; neither %s nor %s specified',
-                fields.SECURE_LAUNCH_URL, fields.LAUNCH_URL)
-            self.error(400)
+            self._handle_error(
+                400,
+                'Unable to process LTI request; no config found for key %s' % (
+                    key))
             return
 
         return_url = self._get_launch_presentation_return_url_or_error(
@@ -898,47 +915,38 @@ class ValidationHandler(_BaseHandler):
         if not return_url:
             return
 
-        # Treat as module-protected. pylint: disable-msg=protected-access
-        missing = fields._get_missing_base(self.request.POST)
-        if missing:
-            _LOG.error(
-                'Unable to process LTI request; missing required fields: %s',
-                ', '.join(missing))
-            self.error(400)
-            return
-
         cb_resource = self.request.POST.get(fields.CUSTOM_CB_RESOURCE)
         if not cb_resource:
-            _LOG.error(
-                'Unable to process LTI request; %s not specified',
-                fields.CUSTOM_CB_RESOURCE)
-            self.error(400)
+            self._handle_error(
+                400, 'Unable to process LTI request; %s not specified' % (
+                    fields.CUSTOM_CB_RESOURCE))
             return
 
         request_signature = self.request.POST.get(self.OAUTH_SIGNATURE_FIELD)
         if not request_signature:
-            _LOG.error(
-                'Unable to process LTI request; %s not specified',
-                self.OAUTH_SIGNATURE_FIELD)
-            self.error(400)
+            self._handle_error(
+                400, 'Unable to process LTI request; %s not specified' % (
+                    self.OAUTH_SIGNATURE_FIELD))
             return
 
         try:
             expected_signature = self._get_expected_signature(
                 security_config.key, security_config.secret, self.request.POST,
-                launch_url)
-        except Exception, e:  # On purpose. pylint: disable-msg=broad-except
-            _LOG.error(
-                'Unable to process LTI request; error calculating '
-                'signature: %s', e)
-            self.error(400)
+                self.request.url)
+        except Exception, e:  # On purpose. pylint: disable=broad-except
+            public_message = 'error calculating signature'
+            private_message = public_message + ': %s' % e
+            self._handle_error(
+                400, private_message, public_message=public_message)
             return
 
         if expected_signature != request_signature:
-            _LOG.error(
-                'Unable to process LTI request; signature mismatch. Ours: %s; '
-                'theirs: %s', expected_signature, request_signature)
-            self.error(400)
+            public_message = (
+                'Unable to process LTI request; signature mismatch')
+            private_message = '%s. Ours: %s; theirs: %s' % (
+                public_message, expected_signature, request_signature)
+            self._handle_error(
+                400, private_message, public_message=public_message)
             return
 
         if self._needs_login(
@@ -967,7 +975,7 @@ def _get_provider_enabled_field(unused_course):
 
 def _get_security_field(unused_course):
     security_example = safe_dom.NodeList().append(
-            safe_dom.Element('pre').add_text('''
+        safe_dom.Element('pre').add_text('''
 - key1: secret1
 - key2: secret2
 '''))
@@ -985,7 +993,7 @@ def _get_security_field(unused_course):
         'be unique within a course, is used to secure LTI launch requests and '
         'ensure that the consumer is who they say they are. For example:' +
         security_example.sanitized,
-        # Treating as module-protected. pylint: disable-msg=protected-access
+        # Treating as module-protected. pylint: disable=protected-access
         validator=_SecurityParser.parse)
 
 
@@ -997,7 +1005,7 @@ def _get_tool_field(unused_course):
   url: http://launch.url
   key: 1234
   secret: 5678
-  version: 1.2
+  version: 1.0
 '''))
     tool_field_name = '%s:%s:%s' % (
         _CONFIG_KEY_COURSE, _CONFIG_KEY_LTI1, _CONFIG_KEY_TOOLS)
@@ -1009,9 +1017,10 @@ def _get_tool_field(unused_course):
         'tool provider you are using; a "description", which is displayed in '
         'the editor when selecting your LTI tool; a "url", which is the LTI '
         'launch URL of the tool you are using; and a "version", which is the '
-        'version of the LTI specification the tool uses (we support 1.0 - '
-        '1.2). For example:' + tool_example.sanitized,
-        # Treating as module-protected. pylint: disable-msg=protected-access
+        'version of the LTI specification the tool uses (we support 1.0 as a '
+        'provider and 1.0 - 1.2 as a consumer). '
+        'For example:' + tool_example.sanitized,
+        # Treating as module-protected. pylint: disable=protected-access
         validator=_ToolsParser.parse)
 
 

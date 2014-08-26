@@ -63,7 +63,7 @@ function get_course_builder() {
         git clone $COURSE_BUILDER_URL $COURSE_BUILDER_CLONE_DIR
         cd $COURSE_BUILDER_CLONE_DIR
         git checkout $COURSE_BUILDER_REVISION
-        git apply $SCRIPTS_RESOURCES_DIR/module.patch
+        patch -p0 < $SCRIPTS_RESOURCES_DIR/module.patch
         mv coursebuilder ..
         rm -rf $COURSE_BUILDER_CLONE_DIR
     fi
