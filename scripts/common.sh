@@ -30,16 +30,24 @@ export SCRIPTS_RESOURCES_DIR=$SCRIPTS_DIR/resources
 
 export COURSE_BUILDER_CLONE_DIR=$EXAMPLES_DIR/course-builder
 export COURSE_BUILDER_DIR=$EXAMPLES_DIR/coursebuilder
-export COURSE_BUILDER_MODULES_DIR=$COURSE_BUILDER_DIR/modules
 # Update this revision to the Course Builder check-in you want.
 export COURSE_BUILDER_REVISION=7aebc8574de7
-export COURSE_BUILDER_TESTS_DIR=$COURSE_BUILDER_DIR/tests
-export COURSE_BUILDER_TESTS_EXT_DIR=$COURSE_BUILDER_TESTS_DIR/ext
 export COURSE_BUILDER_URL=https://code.google.com/p/course-builder/
 
 export MODULE_NAME=lti
 export MODULE_SRC_DIR=$SOURCE_DIR/src
 export MODULE_TESTS_DIR=$SOURCE_DIR/tests
+
+
+function check_directory() {
+    # Die if the given directory does not exist.
+    local target=$1 && shift
+
+    if [ ! -d $target ]; then
+        echo "$target does not exist; aborting"
+        exit 1
+    fi
+}
 
 
 function clean_examples_folder() {
@@ -51,22 +59,36 @@ function clean_examples_folder() {
 
 function get_course_builder() {
     # Fetches CB into examples/coursebuilder.
-    git clone $COURSE_BUILDER_URL $COURSE_BUILDER_CLONE_DIR
-    cd $COURSE_BUILDER_CLONE_DIR
-    git checkout $COURSE_BUILDER_REVISION
-    git apply $SCRIPTS_RESOURCES_DIR/module.patch
-    mv coursebuilder ..
-    rm -rf $COURSE_BUILDER_CLONE_DIR
+    if [ ! -d $COURSE_BUILDER_DIR ]; then
+        git clone $COURSE_BUILDER_URL $COURSE_BUILDER_CLONE_DIR
+        cd $COURSE_BUILDER_CLONE_DIR
+        git checkout $COURSE_BUILDER_REVISION
+        git apply $SCRIPTS_RESOURCES_DIR/module.patch
+        mv coursebuilder ..
+        rm -rf $COURSE_BUILDER_CLONE_DIR
+    fi
 }
 
 
 function link_module() {
     # Symlinks module files into Course Builder directory.
-    ln -s $MODULE_SRC_DIR $COURSE_BUILDER_MODULES_DIR/$MODULE_NAME
+    local target=$1 && shift
+    _link $MODULE_SRC_DIR $target/modules/$MODULE_NAME
 }
 
 
 function link_tests() {
     # Symlinks tests into Course Builder directory.
-    ln -s $MODULE_TESTS_DIR $COURSE_BUILDER_TESTS_EXT_DIR/$MODULE_NAME
+    local target=$1 && shift
+    _link $MODULE_TESTS_DIR $target/tests/ext/$MODULE_NAME
+}
+
+
+function _link() {
+    local from=$1 && shift
+    local to=$1 && shift
+
+    if [ ! -h $to ]; then
+        ln -s $from $to
+    fi
 }

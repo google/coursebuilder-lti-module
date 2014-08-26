@@ -16,10 +16,32 @@
 #
 # author: johncox@google.com (John Cox)
 #
-# Removes any packages installed by the other scripts.
+# Removes any packages installed by other scripts.
 #
 
 . "$(dirname "$0")/common.sh"
+
+
+function usage() { cat <<EOF
+
+Usage: $0 [-h]
+
+Resets $EXAMPLES_DIR to its initial state.
+
+-h  Show this message
+
+EOF
+}
+
+
+while getopts h option
+do
+    case $option
+    in
+        h)  usage; exit 0;;
+        *)  usage; exit 1;;
+    esac
+done
 
 
 clean_examples_folder
