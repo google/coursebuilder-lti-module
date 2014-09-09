@@ -16,21 +16,63 @@
 #
 # author: johncox@google.com (John Cox)
 #
-# Project initialization script.
+# Module setup script.
 #
 
-. "$(dirname "$0")/common.sh"
+set -e
+shopt -s nullglob
+
+export SOURCE_DIR="$( cd "$( dirname "${BASH_ARGV[0]}" )" && cd .. && pwd )"
+# Update this revision to the Course Builder check-in you want.
+export COURSE_BUILDER_REVISION=a65a6ab5a441
+export COURSE_BUILDER_URL=https://code.google.com/p/course-builder/
+
+export MODULE_NAME=lti
+export MODULE_SRC_DIR=$SOURCE_DIR/src
+export MODULE_TESTS_DIR=$SOURCE_DIR/tests
 
 
-TARGET=$COURSE_BUILDER_DIR
+function check_directory() {
+    # Die if the given directory does not exist.
+    local target=$1 && shift
+
+    if [ ! -d $target ]; then
+        echo "$target does not exist; aborting"
+        exit 1
+    fi
+}
+
+
+function link_module() {
+    # Symlinks module files into Course Builder directory.
+    local target=$1 && shift
+    _link $MODULE_SRC_DIR $target/modules/$MODULE_NAME
+}
+
+
+function link_tests() {
+    # Symlinks tests into Course Builder directory.
+    local target=$1 && shift
+    _link $MODULE_TESTS_DIR $target/tests/ext/$MODULE_NAME
+}
+
+
+function _link() {
+    local from=$1 && shift
+    local to=$1 && shift
+
+    if [ ! -h $to ]; then
+        ln -s $from $to
+    fi
+}
 
 
 function usage() { cat <<EOF
 
 Usage: $0 [-d <directory>]
 
--d  Absolute path to the directory containing your Course Builder installation.
-    If not passed, a new install will be created in $TARGET
+-d  Required argument. Absolute path to the directory containing your Course
+    Builder installation.
 -h  Show this message
 
 EOF
@@ -47,11 +89,10 @@ do
     esac
 done
 
-
-if [ $TARGET == $COURSE_BUILDER_DIR ]; then
-    get_course_builder
+if [ ! $TARGET ]; then
+  usage
+  exit 1
 fi
-
 
 check_directory $TARGET
 link_module $TARGET

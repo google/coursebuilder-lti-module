@@ -1,7 +1,7 @@
 module_name: modules.lti.lti
 module_uri: https://github.com/google/coursebuilder-lti-module
-module_version: 1.0.2
-container_version: 1.6.1-7aebc8574de7
+module_version: 1.0.3
+container_version: 1.6.0-a65a6ab5a441
 description: Adds LTI 1.1.1 consumer and provider support to Course Builder
 license: Apache 2.0
 tests:
