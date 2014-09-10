@@ -22,7 +22,7 @@
 set -e
 shopt -s nullglob
 
-export SOURCE_DIR="$( cd "$( dirname "${BASH_ARGV[0]}" )" && cd .. && pwd )"
+export SOURCE_DIR="$( cd "$( dirname "$0" )" && cd .. && pwd )"
 # Update this revision to the Course Builder check-in you want.
 export COURSE_BUILDER_REVISION=a65a6ab5a441
 export COURSE_BUILDER_URL=https://code.google.com/p/course-builder/
