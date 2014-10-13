@@ -463,9 +463,6 @@ class _Runtime(object):
         return '%s?%s' % (
             _urljoin(self.get_base_url(), _LAUNCH_URL), urllib.urlencode(query))
 
-    def get_locale(self):
-        return self._environ.get(_CONFIG_KEY_COURSE, {}).get(_CONFIG_KEY_LOCALE)
-
     def get_login_url(self, return_url):
         query = {fields.LAUNCH_PRESENTATION_RETURN_URL: return_url}
         return users.create_login_url(dest_url='%s?%s' % (
@@ -604,7 +601,7 @@ class LTIToolTag(tags.BaseTag):
         width = node.attrib.get('width') or self._DEFAULT_WIDTH
         resource_link_id = node.attrib.get(fields.RESOURCE_LINK_ID)
         tool = node.attrib.get('tool')
-        extra_fields = node.attrib.get('extra_fields')
+        extra_fields = node.text
 
         if extra_fields:
             # Treating as module-protected: pylint: disable=protected-access
@@ -773,8 +770,8 @@ class LoginHandler(_BaseHandler):
     def _get_post_context(self, return_url, runtime):
         return {'login_url': runtime.get_login_url(return_url)}
 
-    def _get_template(self, name, locale):
-        return jinja_utils.get_template(name, [_TEMPLATES_DIR], locale=locale)
+    def _get_template(self, name):
+        return jinja_utils.get_template(name, [_TEMPLATES_DIR])
 
     def _handle_request(
             self, template_name, get_context_fn, validation_fn=None):
@@ -788,8 +785,7 @@ class LoginHandler(_BaseHandler):
         if validation_fn and not validation_fn():
             return
 
-        template = self._get_template(
-            template_name, locale=runtime.get_locale())
+        template = self._get_template(template_name)
         context = get_context_fn(return_url, runtime)
         self.response.out.write(template.render(context))
 
@@ -1035,12 +1031,14 @@ def register_module():
         _get_provider_enabled_field, _get_security_field, _get_tool_field]
 
     def on_module_enabled():
-        courses.Course.OPTIONS_SCHEMA_PROVIDERS.extend(schema_providers)
+        courses.Course.OPTIONS_SCHEMA_PROVIDERS[
+            courses.Course.SCHEMA_SECTION_COURSE] += schema_providers
         tags.Registry.add_tag_binding(LTIToolTag.binding_name, LTIToolTag)
 
     def on_module_disabled():
         for schema_provider in schema_providers:
-            courses.Course.OPTIONS_SCHEMA_PROVIDERS.remove(schema_provider)
+            courses.Course.OPTIONS_SCHEMA_PROVIDERS[
+                courses.Course.SCHEMA_SECTION_COURSE].remove(schema_provider)
         tags.Registry.remove_tag_binding(LTIToolTag.binding_name)
 
     global_handlers = [
